@@ -1,4 +1,4 @@
-# Input: Action 名称与 JSON 参数
+﻿# Input: Action 名称与 JSON 参数
 # Output: WPS COM 调用结果 JSON
 # Pos: Windows COM 桥接脚本。一旦我被修改，请更新我的头部注释（Updated: 2026-05-26 15:30:00 CST），以及所属文件夹的md。
 # WPS COM Bridge - PowerShell script for WPS COM operations
