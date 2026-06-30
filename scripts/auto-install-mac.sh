@@ -1,7 +1,8 @@
 #!/bin/bash
-# Input: 用户环境与WPS/Node安装状态
-# Output: 安装与配置步骤的执行结果
-# Pos: macOS 一键安装脚本。一旦我被修改，请更新我的头部注释，以及所属文件夹的md。
+# Input: 用户执行安装命令
+# Output: WPS Claude 加载项安装 + MCP Server 构建 + Skills 配置
+# Pos: macOS 自动安装入口脚本
+# 一旦我被修改，请更新我的头部注释，以及所属文件夹的md。
 # WPS Skills Mac 一键安装脚本 (反向轮询架构版)
 # @author 老王
 # @date 2026-01-27
@@ -224,6 +225,18 @@ install_skills() {
     echo ""
 }
 
+# ========== 检测 WPS 进程并提示退出 ==========
+prompt_quit_wps() {
+    if pgrep -f "wpsoffice" > /dev/null 2>&1; then
+        echo ""
+        echo -e "${YELLOW}⚠ 检测到 WPS Office 正在运行${NC}"
+        echo -e "  请按 ${RED}⌘Q${NC} 完全退出 WPS Office，然后重新打开"
+        echo -e "  ${RED}仅关闭窗口(⌘W)不够，加载项不会重新加载${NC}"
+        echo ""
+        read -p "已退出 WPS 后按 Enter 继续..." < /dev/tty
+    fi
+}
+
 # ========== 显示完成信息 ==========
 show_complete() {
     echo "================================================"
@@ -237,7 +250,8 @@ show_complete() {
     echo ""
     echo "下一步操作:"
     echo "  1. 重启 Claude Code"
-    echo "  2. 重启 WPS Office"
+    echo -e "  2. ${YELLOW}完全退出 WPS Office (⌘Q)${NC}，再重新打开"
+    echo -e "     ${RED}⚠ 注意：仅关闭窗口(⌘W)不会重新加载加载项，必须 ⌘Q 退出！${NC}"
     echo "  3. 打开 Excel/Word/PPT 文档"
     echo "  4. 查看 'Claude助手' 选项卡，确认状态为 '轮询中'"
     echo ""
@@ -264,6 +278,7 @@ main() {
     build_mcp_server
     configure_claude_code
     install_skills
+    prompt_quit_wps
     show_complete
 }
 
