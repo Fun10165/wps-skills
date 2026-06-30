@@ -1,7 +1,8 @@
 /**
  * Input: WPS 指令与HTTP请求
- * Output: 轮询执行结果
- * Pos: macOS 轮询服务器实现。一旦我被修改，请更新我的头部注释，以及所属文件夹的md。
+ * Output: 轮询执行结果（含 Issue #17 已连接检测，避免 pkill 杀死已运行 WPS）
+ * Pos: macOS/Linux 轮询服务器实现，MCP Server 与 WPS 加载项之间的桥梁
+ * 一旦我被修改，请更新我的头部注释，以及所属文件夹的md。
  * Mac轮询服务器 - 老王出品
  *
  * 丢，WPS Mac加载项在沙箱里启动不了HTTP服务器，只能反过来：
@@ -258,6 +259,8 @@ class MacPollServer {
   private currentApp: string = '';
   private _isRunning: boolean = false;
   private port: number = 58891;
+  /** Issue #17: 记录最近一次 WPS 加载项 poll 请求的时间戳，用于判断加载项是否已连接 */
+  private lastPollTime: number = 0;
 
   get isRunning(): boolean {
     return this._isRunning;
@@ -336,6 +339,9 @@ class MacPollServer {
    * WPS加载项每500ms来问一次：有活干不？
    */
   private handlePoll(res: http.ServerResponse): void {
+    // Issue #17: 记录 poll 时间，用于判断加载项是否已连接
+    this.lastPollTime = Date.now();
+
     if (this.pendingCommand) {
       const cmd = {
         action: this.pendingCommand.action,
@@ -399,8 +405,16 @@ class MacPollServer {
 
     // 如果需要切换应用
     if (requiredApp && requiredApp !== this.currentApp) {
-      log.info(`[Mac] Switching app from ${this.currentApp || 'none'} to ${requiredApp}`);
-      await this.switchApp(requiredApp);
+      // Issue #17: 如果 WPS 加载项已通过轮询连接（最近 5 秒内有 poll 请求），
+      // 直接更新 currentApp 状态，不触发 switchApp（避免 pkill 杀死已运行的 WPS）
+      const pollAge = Date.now() - this.lastPollTime;
+      if (this.lastPollTime > 0 && pollAge < 5000) {
+        log.info(`[Mac] WPS addon already connected (last poll ${pollAge}ms ago), updating currentApp to ${requiredApp}`);
+        this.currentApp = requiredApp;
+      } else {
+        log.info(`[Mac] Switching app from ${this.currentApp || 'none'} to ${requiredApp}`);
+        await this.switchApp(requiredApp);
+      }
     }
 
     // 发送命令并等待结果

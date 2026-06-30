@@ -1,7 +1,8 @@
 #!/bin/bash
-# Input: 目标应用类型与本地环境
-# Output: WPS 应用自动启动与等待结果
-# Pos: macOS 自动化启动脚本。一旦我被修改，请更新我的头部注释，以及所属文件夹的md。
+# Input: 目标应用类型（et/wps/wpp）与本地环境
+# Output: WPS 应用自动启动、切换与等待结果（含 Issue #17 启动顺序安全检测）
+# Pos: macOS/Linux 自动化启动脚本，被 mac-poll-server.ts switchApp() 调用
+# 一旦我被修改，请更新我的头部注释，以及所属文件夹的md。
 # WPS自动化启动脚本 - Mac版
 # 用于自动启动指定的WPS应用并等待加载项连接
 # @author 老王
@@ -134,6 +135,14 @@ wait_connection() {
 # 切换应用（核心功能）
 switch_to() {
     local target=$1
+
+    # Issue #17: 检测 WPS 是否已在运行，避免无条件 pkill 杀死已有进程
+    if pgrep -f "wpsoffice" >/dev/null 2>&1; then
+        echo "[WPS-Auto] WPS 已在运行，跳过重启"
+        # 仍需等待连接
+        wait_connection "$target"
+        return $?
+    fi
 
     close_all
     sleep 2
