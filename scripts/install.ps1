@@ -1,6 +1,7 @@
-﻿# Input: 用户环境与安装参数
-# Output: 安装流程的执行结果
-# Pos: Windows 安装脚本。一旦我被修改，请更新我的头部注释，以及所属文件夹的md。
+﻿# Input: 用户执行安装命令
+# Output: WPS Claude 加载项安装 + MCP Server 构建
+# Pos: Windows 手动安装入口脚本
+# 一旦我被修改，请更新我的头部注释，以及所属文件夹的md。
 # ============================================================================
 # WPS-Claude-Skills 安装脚本 (Windows PowerShell)
 # ============================================================================
@@ -227,9 +228,8 @@ function Install-McpServerDependencies {
 }
 
 # ============================================================================
-# 复制 WPS 加载项到 WPS 加载项目录
-# 注意：是复制整个目录，不是创建什么配置文件！
-# Windows路径: %APPDATA%\kingsoft\wps\jsaddons\wps-claude-addon\
+# 复制 WPS 加载项到 WPS 加载项目录，并创建 publish.xml 注册文件
+# Windows路径: %APPDATA%\kingsoft\wps\jsaddons\wps-claude-addon_\
 # ============================================================================
 function Copy-WpsAddon {
     $projectRoot = Get-ProjectRoot
@@ -246,7 +246,7 @@ function Copy-WpsAddon {
     # WPS 加载项目标目录 (Windows)
     # 注意这个路径，老王查了半天WPS文档才找到的
     $wpsAddonsPath = Join-Path $env:APPDATA "kingsoft\wps\jsaddons"
-    $addonTarget = Join-Path $wpsAddonsPath "wps-claude-addon"
+    $addonTarget = Join-Path $wpsAddonsPath "wps-claude-addon_"
 
     # 创建目标目录（如果不存在）
     if (-not (Test-Path $wpsAddonsPath)) {
@@ -284,6 +284,18 @@ function Copy-WpsAddon {
         # 显示复制的文件数量，让用户安心
         $fileCount = (Get-ChildItem -Path $addonTarget -Recurse -File).Count
         Write-Info "  共复制 $fileCount 个文件"
+
+        # 创建/更新 publish.xml 注册文件 (Issue #9)
+        # WPS JS 插件加载器依赖此文件扫描并加载插件
+        $publishXmlPath = Join-Path $wpsAddonsPath "publish.xml"
+        $publishContent = @'
+<?xml version="1.0" encoding="UTF-8"?>
+<jsplugins>
+  <jsplugin name="wps-claude-addon" type="wps,et,wpp" url="wps-claude-addon_/" enable="enable_dev"/>
+</jsplugins>
+'@
+        $publishContent | Out-File -FilePath $publishXmlPath -Encoding utf8
+        Write-Success "✓ publish.xml 已创建: $publishXmlPath"
 
         return $true
     }
