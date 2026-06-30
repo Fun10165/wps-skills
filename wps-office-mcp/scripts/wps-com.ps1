@@ -17,24 +17,71 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 
 function Get-WpsExcel {
     try { return [System.Runtime.InteropServices.Marshal]::GetActiveObject('Ket.Application') }
-    catch { return $null }
+    catch {
+        try {
+            $app = New-Object -ComObject 'Ket.Application'
+            if ($app) { return $app }
+        } catch {
+            try {
+                $clsid = (Get-ItemProperty -Path 'HKCU:\Software\Classes\Ket.Application\CLSID' -ErrorAction Stop).'(default)'
+                if ($clsid) {
+                    $type = [Type]::GetTypeFromCLSID($clsid)
+                    if ($type) {
+                        $app = [Activator]::CreateInstance($type)
+                        if ($app) { return $app }
+                    }
+                }
+            } catch {}
+        }
+        return $null
+    }
 }
 
 function Get-WpsWord {
     try { return [System.Runtime.InteropServices.Marshal]::GetActiveObject('Kwps.Application') }
-    catch { return $null }
+    catch {
+        try {
+            $app = New-Object -ComObject 'Kwps.Application'
+            if ($app) { return $app }
+        } catch {
+            try {
+                $clsid = (Get-ItemProperty -Path 'HKCU:\Software\Classes\Kwps.Application\CLSID' -ErrorAction Stop).'(default)'
+                if ($clsid) {
+                    $type = [Type]::GetTypeFromCLSID($clsid)
+                    if ($type) {
+                        $app = [Activator]::CreateInstance($type)
+                        if ($app) { return $app }
+                    }
+                }
+            } catch {}
+        }
+        return $null
+    }
 }
 
 function Get-WpsPpt {
     try { return [System.Runtime.InteropServices.Marshal]::GetActiveObject('Kwpp.Application') }
     catch {
-        # 活动对象取不到(演示未运行 / ROT 注册过期)时，用 CreateObject 拉起/附着 WPS 演示，
-        # 使 open/create 等操作在无打开窗口时也能工作(GetActiveObject 仅能附着前台实例，无法冷启动)。
         try {
             $app = New-Object -ComObject Kwpp.Application
             try { $app.Visible = $true } catch {}
             return $app
-        } catch { return $null }
+        } catch {
+            try {
+                $clsid = (Get-ItemProperty -Path 'HKCU:\Software\Classes\Kwpp.Application\CLSID' -ErrorAction Stop).'(default)'
+                if ($clsid) {
+                    $type = [Type]::GetTypeFromCLSID($clsid)
+                    if ($type) {
+                        $app = [Activator]::CreateInstance($type)
+                        if ($app) {
+                            try { $app.Visible = $true } catch {}
+                            return $app
+                        }
+                    }
+                }
+            } catch {}
+        }
+        return $null
     }
 }
 
