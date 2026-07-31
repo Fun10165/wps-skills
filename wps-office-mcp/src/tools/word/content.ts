@@ -106,7 +106,7 @@ export const insertTextHandler: ToolHandler = async (
       WpsAppType.WRITER
     );
 
-    if (response.success && response.data) {
+    if (response.success) {
       const positionText =
         position === 'start' ? '文档开头' :
         position === 'end' ? '文档结尾' : '光标位置';
@@ -117,7 +117,7 @@ export const insertTextHandler: ToolHandler = async (
         content: [
           {
             type: 'text',
-            text: `文本插入成功！\n位置: ${positionText}\n字符数: ${response.data.textLength}${style ? `\n应用样式: ${style}` : ''}`,
+            text: `文本插入成功！\n位置: ${positionText}\n字符数: ${(response.data as any)?.textLength ?? 0}${style ? `\n应用样式: ${style}` : ''}`,
           },
         ],
       };

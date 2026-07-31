@@ -209,8 +209,8 @@ export const setFontHandler: ToolHandler = async (
       WpsAppType.WRITER
     );
 
-    if (response.success && response.data) {
-      const settings = response.data.settings;
+    if (response.success) {
+      const settings = (response.data as any)?.settings || {};
       let settingStr = '';
       if (settings.fontName) settingStr += `字体: ${settings.fontName}\n`;
       if (settings.fontSize) settingStr += `字号: ${settings.fontSize}\n`;
