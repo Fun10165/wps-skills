@@ -444,6 +444,11 @@ export const insertImageDefinition: ToolDefinition = {
         type: 'string',
         description: '图片文件路径',
       },
+      position: {
+        type: 'string',
+        description: '插入位置：start（文档开头）/ end（文档结尾）/ cursor（光标处，默认）',
+        enum: ['start', 'end', 'cursor'],
+      },
       width: {
         type: 'number',
         description: '图片宽度（磅），可选',
@@ -460,10 +465,11 @@ export const insertImageDefinition: ToolDefinition = {
 export const insertImageHandler: ToolHandler = async (
   args: Record<string, unknown>
 ): Promise<ToolCallResult> => {
-  const { imagePath, width, height } = args as {
+  const { imagePath, width, height, position } = args as {
     imagePath: string;
     width?: number;
     height?: number;
+    position?: string;
   };
 
   if (!imagePath || imagePath.trim() === '') {
@@ -482,7 +488,7 @@ export const insertImageHandler: ToolHandler = async (
       message: string;
     }>(
       'insertImage',
-      { imagePath, path: imagePath, filePath: imagePath, width, height },
+      { imagePath, path: imagePath, filePath: imagePath, width, height, position },
       WpsAppType.WRITER
     );
 

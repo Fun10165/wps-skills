@@ -3784,7 +3784,16 @@ function handleInsertImage(params) {
         var path = params.path || params.filePath;
         if (!path) return { success: false, error: '图片路径不能为空' };
 
-        var range = Application.Selection.Range;
+        // 插入位置：start=文档开头 / end=文档结尾 / 默认光标位置
+        var range;
+        var pos = params.position || 'cursor';
+        if (pos === 'start') {
+            range = doc.Range(0, 0);
+        } else if (pos === 'end') {
+            range = doc.Range(doc.Content.End - 1, doc.Content.End - 1);
+        } else {
+            range = Application.Selection.Range;
+        }
         var shape = doc.InlineShapes.AddPicture(path, false, true, range);
 
         // 调整大小
