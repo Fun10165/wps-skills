@@ -917,6 +917,9 @@ function handleCommand(cmd) {
             case 'saveAs':
                 result = handleSaveAs(cmd.params);
                 break;
+            case 'convertFormat':
+                result = handleConvertFormat(cmd.params);
+                break;
 
             default:
                 result = { success: false, error: '未知命令: ' + cmd.action };
@@ -5653,24 +5656,60 @@ function handleSaveAs(params) {
         var appType = getAppType();
         var outputPath = params.path || params.outputPath;
         if (!outputPath) return { success: false, error: '请指定保存路径' };
+        // 可选格式码：不传则按扩展名推断（部分场景会保留原二进制格式，
+        // 因此转换请显式传 formatCode，见 handleConvertFormat）
+        var code = (typeof params.formatCode === 'number') ? params.formatCode : null;
 
         if (appType === 'wps') {
             var doc = Application.ActiveDocument;
             if (!doc) return { success: false, error: '没有打开的文档' };
-            doc.SaveAs2(outputPath);
+            if (code !== null) { doc.SaveAs2(outputPath, code); } else { doc.SaveAs2(outputPath); }
         } else if (appType === 'et') {
             var wb = Application.ActiveWorkbook;
             if (!wb) return { success: false, error: '没有打开的工作簿' };
-            wb.SaveAs(outputPath);
+            if (code !== null) { wb.SaveAs(outputPath, code); } else { wb.SaveAs(outputPath); }
         } else if (appType === 'wpp') {
             var pres = Application.ActivePresentation;
             if (!pres) return { success: false, error: '没有打开的演示文稿' };
-            pres.SaveAs(outputPath);
+            if (code !== null) { pres.SaveAs(outputPath, code); } else { pres.SaveAs(outputPath); }
         } else {
             return { success: false, error: '无法识别当前应用类型' };
         }
 
         return { success: true, data: { filePath: outputPath } };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+}
+
+// 目标格式扩展名 -> 格式码（VBA 常量）
+var FORMAT_CODES = {
+    // Word
+    'doc': 0, 'docx': 12, 'rtf': 6, 'txt': 2, 'html': 8, 'xml': 11,
+    // Excel
+    'xls': 56, 'xlsx': 51, 'xlsm': 52, 'csv': 6,
+    // PPT
+    'ppt': 1, 'pptx': 24, 'pptm': 25
+};
+
+function handleConvertFormat(params) {
+    try {
+        var appType = getAppType();
+        var target = String(params.targetFormat || '').toLowerCase().replace(/^\./, '');
+        if (!target) return { success: false, error: '请指定目标格式' };
+        var code = FORMAT_CODES[target];
+        if (code === undefined) return { success: false, error: '不支持的格式: ' + target };
+
+        var outputPath = params.outputPath;
+        if (!outputPath) {
+            var active = (appType === 'wps') ? Application.ActiveDocument
+                       : (appType === 'et') ? Application.ActiveWorkbook
+                       : Application.ActivePresentation;
+            if (!active) return { success: false, error: '没有打开的文档' };
+            outputPath = active.FullName.replace(/\.[^.]+$/, '') + '.' + target;
+        }
+
+        return handleSaveAs({ path: outputPath, formatCode: code });
     } catch (e) {
         return { success: false, error: e.message };
     }

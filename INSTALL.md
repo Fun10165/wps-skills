@@ -61,7 +61,8 @@ chmod +x scripts/auto-install-mac.sh
 - 二次检测前置条件（macOS、WPS Office、Node.js 18+）
 - 创建 WPS 加载项目录（如不存在）
 - 安装加载项文件到 `~/Library/Containers/com.kingsoft.wpsoffice.mac/Data/.kingsoft/wps/jsaddons/claude-assistant_/`（目录名尾部 `_` 是必须的）
-- 更新 publish.xml 注册加载项
+- 创建 LaunchAgent `com.wps-skills.addon-server`（端口 58893）以 HTTP 形态托管仓库目录（WPS Mac 无法渲染 file:// 相对路径的 addon 页面，必须 HTTP 部署）
+- 更新 publish.xml 注册加载项（url 指向 `http://127.0.0.1:58893/wps-claude-assistant/`）
 - 执行 `npm install` 安装依赖
 - 执行 `npm run build` 编译 TypeScript
 - 执行 `claude mcp add wps-office` 注册 MCP Server

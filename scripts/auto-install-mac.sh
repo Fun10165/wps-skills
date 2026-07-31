@@ -115,17 +115,66 @@ install_addon() {
     echo ""
 }
 
+# ========== 启动本地静态服务器 (LaunchAgent) ==========
+# macOS WPS 无法从 file:// 路径渲染 addon 页面（页面不渲染→JS 不执行），
+# 必须用 HTTP 形态部署（官方 wpsjs 的标准做法）。此服务随用户登录常驻。
+setup_addon_server() {
+    echo "========== [4/6] 配置本地静态服务器 =========="
+
+    ADDON_SERVER_PORT="${ADDON_SERVER_PORT:-58893}"
+    LAUNCH_AGENT="$HOME/Library/LaunchAgents/com.wps-skills.addon-server.plist"
+    mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.wps-office-mcp/logs"
+
+    cat > "$LAUNCH_AGENT" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.wps-skills.addon-server</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>-m</string>
+        <string>http.server</string>
+        <string>${ADDON_SERVER_PORT}</string>
+        <string>--directory</string>
+        <string>${PROJECT_DIR}</string>
+        <string>--bind</string>
+        <string>127.0.0.1</string>
+    </array>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+    <key>StandardOutPath</key><string>${HOME}/.wps-office-mcp/logs/addon-server.log</string>
+    <key>StandardErrorPath</key><string>${HOME}/.wps-office-mcp/logs/addon-server.err.log</string>
+</dict>
+</plist>
+EOF
+
+    launchctl unload "$LAUNCH_AGENT" 2>/dev/null || true
+    launchctl load "$LAUNCH_AGENT"
+    sleep 1
+
+    if curl -fsS "http://127.0.0.1:${ADDON_SERVER_PORT}/wps-claude-assistant/main.js" -o /dev/null 2>/dev/null; then
+        echo -e "${GREEN}✓ 静态服务器就绪: http://127.0.0.1:${ADDON_SERVER_PORT}/${NC}"
+    else
+        echo -e "${YELLOW}⚠ 静态服务器验证失败，请检查 $LAUNCH_AGENT${NC}"
+    fi
+    echo ""
+}
+
 # ========== 更新 publish.xml ==========
 update_publish_xml() {
-    echo "========== [4/5] 更新加载项配置 =========="
+    echo "========== [5/6] 更新加载项配置 =========="
 
     PUBLISH_XML="$WPS_ADDON_DIR/publish.xml"
+    ADDON_SERVER_PORT="${ADDON_SERVER_PORT:-58893}"
 
     # 创建或更新 publish.xml
-    cat > "$PUBLISH_XML" << 'EOF'
+    # 注意: url 必须指向 HTTP 地址（file:// 相对路径在 macOS 上页面不渲染）
+    cat > "$PUBLISH_XML" << EOF
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <jsplugins>
-  <jsplugin name="claude-assistant" type="wps,et,wpp" url="claude-assistant_/" enable="enable_dev"/>
+  <jspluginonline name="claude-assistant" type="wps,et,wpp" url="http://127.0.0.1:${ADDON_SERVER_PORT}/wps-claude-assistant/" debug="" enable="enable_dev" install="null"/>
 </jsplugins>
 EOF
 
@@ -274,6 +323,7 @@ main() {
     check_prerequisites
     check_addon_dir
     install_addon
+    setup_addon_server
     update_publish_xml
     build_mcp_server
     configure_claude_code

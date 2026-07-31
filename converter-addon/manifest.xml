@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest xmlns="http://schemas.wps.cn/oaassist/2019/manifest"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <id>docx-converter</id>
+    <version>1.0.0</version>
+    <name>格式转换器</name>
+    <description>批量将旧格式(.doc/.xls/.ppt)转换为新格式(.docx/.xlsx/.pptx)</description>
+    <author>local</author>
+
+    <hosts>
+        <host name="wps"/>
+        <host name="et"/>
+        <host name="wpp"/>
+    </hosts>
+
+    <permissions>
+        <permission name="document.read"/>
+        <permission name="document.write"/>
+    </permissions>
+
+    <ribbon src="ribbon.xml"/>
+
+    <scripts>
+        <script src="tasks.js"/>
+        <script src="main.js"/>
+    </scripts>
+</manifest>

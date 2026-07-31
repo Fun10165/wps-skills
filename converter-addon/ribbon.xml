@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<customUI xmlns="http://schemas.microsoft.com/office/2006/01/customui" onLoad="OnAddinLoad">
+  <ribbon startFromScratch="false">
+    <tabs>
+      <tab id="convTab" label="格式转换">
+        <group id="convGroup" label="批量转换">
+          <button id="btnRun" label="开始转换" size="large" onAction="OnRunClick"/>
+        </group>
+      </tab>
+    </tabs>
+  </ribbon>
+</customUI>

@@ -124,9 +124,15 @@ Skills层(SKILL.md自然语言指导)
 MCP Server层(239个工具)
   ↓ wpsClient.executeMethod()
 执行层
-  ├── macOS: wps-claude-assistant (227 action, HTTP轮询)
+  ├── macOS: wps-claude-assistant (227 action, HTTP轮询，经本地静态服务器HTTP部署)
   └── Windows: wps-com.ps1 (231 action, COM接口)
 ```
+
+> **macOS 部署说明**: WPS Mac 无法从 file:// 相对路径渲染 addon 页面（页面不渲染→JS 不执行，
+> 表现为 `isload:true` 但无选项卡、不轮询）。安装脚本会创建 LaunchAgent
+> `com.wps-skills.addon-server`（端口 58893，可用 `ADDON_SERVER_PORT` 覆盖），
+> 将仓库目录以 HTTP 形态托管，publish.xml 的 url 指向
+> `http://127.0.0.1:58893/wps-claude-assistant/`。
 
 ## 工具清单
 
@@ -144,6 +150,7 @@ MCP Server层(239个工具)
 |------|---------|
 | MCP连接失败 | 确认 `npm install && npm run build` 已执行，检查dist/index.js存在 |
 | WPS未响应 | 重启WPS Office，确认加载项已安装 |
+| macOS：加载项已安装但无Claude助手选项卡/不轮询 | 确认 LaunchAgent 静态服务器运行中：`launchctl list | grep wps-skills`；端口被占用时用 `ADDON_SERVER_PORT` 换端口后重跑安装脚本 |
 | "arguments error" | 重新运行安装脚本，重启WPS |
 | Linux找不到插件 | 查看INSTALL.md中的Linux专用指南 |
 | 工具调用返回null | 确认WPS中已打开对应类型的文档 |
