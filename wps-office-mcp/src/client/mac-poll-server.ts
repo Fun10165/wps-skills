@@ -424,8 +424,10 @@ class MacPollServer {
     // 轮询词汇 (wps/et/wpp) 用于 lastPollTimeByApp 与 pendingCommand.app
     const requiredLogical = this.getRequiredApp(action);
     const requiredPoll = APP_ALIAS[requiredLogical] || '';
-    // 路由目标：优先命令映射，其次调用方显式 appType，最后回退最近组件
-    const routeApp = requiredPoll || (appHint as string) || APP_ALIAS[this.currentApp] || '';
+    // 路由目标：优先命令映射，其次调用方显式 appType。
+    // 注意：不回退 currentApp——那会把通用命令（ping/wireCheck/checkConnection）
+    // 路由到陈旧组件导致无人应答。多组件下文档操作请显式传 appType。
+    const routeApp = requiredPoll || (appHint as string) || '';
 
     // 如果需要切换应用
     if (requiredLogical && requiredLogical !== this.currentApp) {
