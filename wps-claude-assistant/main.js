@@ -57,7 +57,8 @@ function poll() {
 
     try {
         var xhr = new XMLHttpRequest();
-        xhr.open('GET', CONFIG.SERVER_URL + '/poll', true);
+        // 带组件标识，服务端据此把命令路由给正确的组件实例（多组件同时打开时必需）
+        xhr.open('GET', CONFIG.SERVER_URL + '/poll?app=' + encodeURIComponent(getAppType()), true);
         xhr.timeout = 5000;
 
         xhr.onload = function() {
@@ -1399,7 +1400,7 @@ function handleBeautifySlide(params) {
 // 创建新演示文稿
 function handleCreatePresentation(params) {
     try {
-        var ppt = Application.Presentations.Add();
+        var ppt = getPresentations().Add();
         return { success: true, data: { name: ppt.Name, slideCount: ppt.Slides.Count } };
     } catch (e) {
         return { success: false, error: e.message };
@@ -1424,7 +1425,7 @@ function handleOpenPresentation(params) {
 // 关闭演示文稿
 function handleClosePresentation(params) {
     try {
-        var ppt = params.name ? Application.Presentations.Item(params.name) : Application.ActivePresentation;
+        var ppt = params.name ? getPresentations().Item(params.name) : Application.ActivePresentation;
         if (!ppt) return { success: false, error: '没有找到演示文稿' };
         var name = ppt.Name;
         ppt.Close();
@@ -1434,12 +1435,22 @@ function handleClosePresentation(params) {
     }
 }
 
+// 解析可用的演示文稿集合：优先 wpp 专属全局，回退 Application
+// （实测 WPS wpp JS API 中 Application.Presentations 不存在，同 Excel 的 Workbooks 情况）
+function getPresentations() {
+    try {
+        if (typeof wpp !== 'undefined' && wpp.Presentations) return wpp.Presentations;
+    } catch (e) {}
+    return Application.Presentations;
+}
+
 // 获取所有打开的演示文稿
 function handleGetOpenPresentations(params) {
     try {
         var presentations = [];
-        for (var i = 1; i <= Application.Presentations.Count; i++) {
-            var ppt = Application.Presentations.Item(i);
+        var pres = getPresentations();
+        for (var i = 1; i <= pres.Count; i++) {
+            var ppt = pres.Item(i);
             presentations.push({ name: ppt.Name, path: ppt.FullName, slideCount: ppt.Slides.Count });
         }
         return { success: true, data: { presentations: presentations, count: presentations.length } };
@@ -1451,7 +1462,7 @@ function handleGetOpenPresentations(params) {
 // 切换演示文稿
 function handleSwitchPresentation(params) {
     try {
-        var ppt = Application.Presentations.Item(params.name || params.index);
+        var ppt = getPresentations().Item(params.name || params.index);
         ppt.Windows.Item(1).Activate();
         return { success: true, data: { name: ppt.Name } };
     } catch (e) {

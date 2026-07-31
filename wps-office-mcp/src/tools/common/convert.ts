@@ -159,9 +159,10 @@ export const convertToPdfDefinition: ToolDefinition = {
 export const convertToPdfHandler: ToolHandler = async (
   args: Record<string, unknown>
 ): Promise<ToolCallResult> => {
-  const { outputPath, openAfterExport } = args as {
+  const { outputPath, openAfterExport, appType } = args as {
     outputPath?: string;
     openAfterExport?: boolean;
+    appType?: string;
   };
 
   try {
@@ -181,8 +182,9 @@ export const convertToPdfHandler: ToolHandler = async (
         path: outputPath || '',
         filePath: outputPath || '',
         openAfterExport: openAfterExport || false,
-      }
-      // 不指定appType，让WPS加载项自动检测当前活动的应用
+      },
+      // 指定 appType 时参与组件路由，避免多组件同时打开时命令被错误实例领取
+      appType as any
     );
 
     if (response.success && response.data) {
@@ -255,6 +257,11 @@ export const convertFormatDefinition: ToolDefinition = {
         type: 'string',
         description: '输出路径（包含文件名），如不指定则使用原文件名改为新扩展名',
       },
+      appType: {
+        type: 'string',
+        description: '目标组件：wps（文字）/ et（表格）/ wpp（演示）。多文档打开时必填，确保命令路由到正确组件',
+        enum: ['wps', 'et', 'wpp'],
+      },
     },
     required: ['targetFormat'],
   },
@@ -263,9 +270,10 @@ export const convertFormatDefinition: ToolDefinition = {
 export const convertFormatHandler: ToolHandler = async (
   args: Record<string, unknown>
 ): Promise<ToolCallResult> => {
-  const { targetFormat, outputPath } = args as {
+  const { targetFormat, outputPath, appType } = args as {
     targetFormat: string;
     outputPath?: string;
+    appType?: string;
   };
 
   if (!targetFormat || targetFormat.trim() === '') {
@@ -295,8 +303,9 @@ export const convertFormatHandler: ToolHandler = async (
         // 跨平台参数对齐：补齐 path/filePath 别名，避免底层只读取单一字段名导致路径丢失
         path: outputPath || '',
         filePath: outputPath || '',
-      }
-      // 不指定appType，让WPS加载项自动检测
+      },
+      // 指定 appType 时参与组件路由，避免多组件同时打开时命令被错误实例领取
+      appType as any
     );
 
     if (response.success && response.data) {

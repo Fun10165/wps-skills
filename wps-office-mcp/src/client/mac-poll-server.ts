@@ -18,6 +18,8 @@ import * as path from 'path';
 import { log } from '../utils/logger';
 
 // 命令→应用类型映射（完整版，覆盖所有 SKILL.md 动作）
+// 词汇: word/excel/ppt，经 APP_ALIAS 转为 addon 侧词汇 wps/et/wpp
+const APP_ALIAS: Record<string, string> = { word: 'wps', excel: 'et', ppt: 'wpp' };
 const COMMAND_APP_MAP: Record<string, string> = {
   // ==================== Excel 命令 ====================
   getActiveWorkbook: 'excel',
@@ -244,6 +246,8 @@ interface PendingCommand {
   action: string;
   params: Record<string, unknown>;
   requestId: string;
+  /** 命令目标应用（wps/et/wpp，空=通用命令任意实例可处理） */
+  app?: string;
   resolve: (result: unknown) => void;
   reject: (error: Error) => void;
   timeout: NodeJS.Timeout;
@@ -259,8 +263,8 @@ class MacPollServer {
   private currentApp: string = '';
   private _isRunning: boolean = false;
   private port: number = 58891;
-  /** Issue #17: 记录最近一次 WPS 加载项 poll 请求的时间戳，用于判断加载项是否已连接 */
-  private lastPollTime: number = 0;
+  /** Issue #17: 按组件记录最近一次 poll 请求时间（wps/et/wpp），用于判断目标组件是否已连接 */
+  private lastPollTimeByApp: Record<string, number> = {};
 
   get isRunning(): boolean {
     return this._isRunning;
@@ -297,12 +301,15 @@ class MacPollServer {
         }
 
         const url = req.url || '';
+        // 注意: addon 轮询带查询参数 (?app=et)，必须按 pathname 匹配
+        let pathname = url;
+        try { pathname = new URL(url, 'http://127.0.0.1').pathname; } catch (e) {}
 
-        if (url === '/poll' && req.method === 'GET') {
-          this.handlePoll(res);
-        } else if (url === '/result' && req.method === 'POST') {
+        if (pathname === '/poll' && req.method === 'GET') {
+          this.handlePoll(res, url);
+        } else if (pathname === '/result' && req.method === 'POST') {
           this.handleResult(req, res);
-        } else if (url === '/status') {
+        } else if (pathname === '/status') {
           // 状态检查接口
           res.end(JSON.stringify({
             status: 'running',
@@ -337,18 +344,31 @@ class MacPollServer {
   /**
    * 处理轮询请求
    * WPS加载项每500ms来问一次：有活干不？
+   * 多组件同时存在时（wps/et/wpp 各自加载项实例都在轮询），
+   * 必须按 app 参数路由，否则命令会被错误的组件实例取走。
    */
-  private handlePoll(res: http.ServerResponse): void {
-    // Issue #17: 记录 poll 时间，用于判断加载项是否已连接
-    this.lastPollTime = Date.now();
+  private handlePoll(res: http.ServerResponse, reqUrl: string): void {
+    // Issue #17: 记录 poll 时间，用于判断加载项是否已连接（按组件）
+    // 解析轮询方所在组件: /poll?app=et|wps|wpp
+    let pollerApp = '';
+    try {
+      const q = new URL(reqUrl, 'http://127.0.0.1').searchParams.get('app');
+      if (q) pollerApp = q;
+    } catch (e) {}
+    this.lastPollTimeByApp[pollerApp || 'unknown'] = Date.now();
 
     if (this.pendingCommand) {
+      // 命令指定了目标组件且轮询方不是目标组件 -> 不派发，等目标组件来取
+      if (this.pendingCommand.app && pollerApp !== this.pendingCommand.app) {
+        res.end(JSON.stringify({}));
+        return;
+      }
       const cmd = {
         action: this.pendingCommand.action,
         params: this.pendingCommand.params,
         requestId: this.pendingCommand.requestId
       };
-      log.debug('[Mac] Sending command to addon', { action: cmd.action, requestId: cmd.requestId });
+      log.debug('[Mac] Sending command to addon', { action: cmd.action, app: pollerApp, requestId: cmd.requestId });
       res.end(JSON.stringify({ command: cmd }));
     } else {
       // 没活，回个空的
@@ -399,21 +419,26 @@ class MacPollServer {
    * 2. 把命令放到队列里等WPS加载项来取
    * 3. 等待结果返回
    */
-  async executeCommand(action: string, params: Record<string, unknown> = {}, timeout: number = 30000): Promise<unknown> {
-    // 确定需要的应用类型
-    const requiredApp = this.getRequiredApp(action);
+  async executeCommand(action: string, params: Record<string, unknown> = {}, timeout: number = 30000, appHint?: string): Promise<unknown> {
+    // 逻辑词汇 (word/excel/ppt) 用于 currentApp/switchApp；
+    // 轮询词汇 (wps/et/wpp) 用于 lastPollTimeByApp 与 pendingCommand.app
+    const requiredLogical = this.getRequiredApp(action);
+    const requiredPoll = APP_ALIAS[requiredLogical] || '';
+    // 路由目标：优先命令映射，其次调用方显式 appType，最后回退最近组件
+    const routeApp = requiredPoll || (appHint as string) || APP_ALIAS[this.currentApp] || '';
 
     // 如果需要切换应用
-    if (requiredApp && requiredApp !== this.currentApp) {
-      // Issue #17: 如果 WPS 加载项已通过轮询连接（最近 5 秒内有 poll 请求），
-      // 直接更新 currentApp 状态，不触发 switchApp（避免 pkill 杀死已运行的 WPS）
-      const pollAge = Date.now() - this.lastPollTime;
-      if (this.lastPollTime > 0 && pollAge < 5000) {
-        log.info(`[Mac] WPS addon already connected (last poll ${pollAge}ms ago), updating currentApp to ${requiredApp}`);
-        this.currentApp = requiredApp;
+    if (requiredLogical && requiredLogical !== this.currentApp) {
+      // Issue #17: 仅当目标组件自己最近有轮询（5 秒内）才视为已连接，
+      // 否则必须 switchApp 拉起目标组件（否则命令会被 app 过滤永远无人领取）
+      const targetLastPoll = this.lastPollTimeByApp[requiredPoll] || 0;
+      const pollAge = Date.now() - targetLastPoll;
+      if (targetLastPoll > 0 && pollAge < 5000) {
+        log.info(`[Mac] ${requiredPoll} addon already connected (last poll ${pollAge}ms ago), updating currentApp`);
+        this.currentApp = requiredLogical;
       } else {
-        log.info(`[Mac] Switching app from ${this.currentApp || 'none'} to ${requiredApp}`);
-        await this.switchApp(requiredApp);
+        log.info(`[Mac] Switching app from ${this.currentApp || 'none'} to ${requiredLogical}`);
+        await this.switchApp(requiredLogical);
       }
     }
 
@@ -433,12 +458,13 @@ class MacPollServer {
         action,
         params,
         requestId,
+        app: routeApp,
         resolve,
         reject,
         timeout: timeoutHandle
       };
 
-      log.debug('[Mac] Command queued', { action, requestId });
+      log.debug('[Mac] Command queued', { action, app: routeApp, requestId });
     });
   }
 
