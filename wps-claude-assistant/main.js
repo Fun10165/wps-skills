@@ -1410,8 +1410,12 @@ function handleCreatePresentation(params) {
 function handleOpenPresentation(params) {
     try {
         if (!params.path) return { success: false, error: '请提供演示文稿路径' };
-        var ppt = Application.Presentations.Open(params.path);
-        return { success: true, data: { name: ppt.Name, path: ppt.FullName, slideCount: ppt.Slides.Count } };
+        var pres;
+        try {
+            if (typeof wpp !== 'undefined' && wpp.Presentations) pres = wpp.Presentations.Open(params.path);
+        } catch (e) {}
+        if (!pres) pres = Application.Presentations.Open(params.path);
+        return { success: true, data: { name: pres.Name, path: pres.FullName, slideCount: pres.Slides.Count } };
     } catch (e) {
         return { success: false, error: e.message };
     }
@@ -5224,11 +5228,20 @@ function handleProtectWorkbook(params) {
 
 // ==================== P0 财务/金融核心功能 Handlers ====================
 
+// 解析可用的工作簿集合：优先 et 专属全局，回退 Application
+// （实测 WPS et JS API 中 Application.Workbooks 不存在，et.Workbooks 可用）
+function getWorkbooks() {
+    try {
+        if (typeof et !== 'undefined' && et.Workbooks) return et.Workbooks;
+    } catch (e) {}
+    return Application.Workbooks;
+}
+
 // 打开工作簿
 function handleOpenWorkbook(params) {
     try {
         if (!params.path) return { success: false, error: '请提供工作簿路径' };
-        var wb = Application.Workbooks.Open(params.path, params.updateLinks, params.readOnly);
+        var wb = getWorkbooks().Open(params.path, params.updateLinks, params.readOnly);
         return { success: true, data: { name: wb.Name, path: wb.FullName, sheets: wb.Sheets.Count } };
     } catch (e) {
         return { success: false, error: e.message };
@@ -5239,8 +5252,9 @@ function handleOpenWorkbook(params) {
 function handleGetOpenWorkbooks(params) {
     try {
         var workbooks = [];
-        for (var i = 1; i <= Application.Workbooks.Count; i++) {
-            var wb = Application.Workbooks.Item(i);
+        var wbs = getWorkbooks();
+        for (var i = 1; i <= wbs.Count; i++) {
+            var wb = wbs.Item(i);
             workbooks.push({ name: wb.Name, path: wb.FullName, sheets: wb.Sheets.Count, active: wb.Name === Application.ActiveWorkbook.Name });
         }
         return { success: true, data: { workbooks: workbooks, count: workbooks.length } };
@@ -5252,7 +5266,7 @@ function handleGetOpenWorkbooks(params) {
 // 切换活动工作簿
 function handleSwitchWorkbook(params) {
     try {
-        var wb = Application.Workbooks.Item(params.name || params.index);
+        var wb = getWorkbooks().Item(params.name || params.index);
         wb.Activate();
         return { success: true, data: { name: wb.Name, path: wb.FullName } };
     } catch (e) {
@@ -5263,7 +5277,7 @@ function handleSwitchWorkbook(params) {
 // 关闭工作簿
 function handleCloseWorkbook(params) {
     try {
-        var wb = params.name ? Application.Workbooks.Item(params.name) : Application.ActiveWorkbook;
+        var wb = params.name ? getWorkbooks().Item(params.name) : Application.ActiveWorkbook;
         if (!wb) return { success: false, error: '没有找到工作簿' };
         var name = wb.Name;
         wb.Close(params.saveChanges !== false);
@@ -5276,7 +5290,7 @@ function handleCloseWorkbook(params) {
 // 创建新工作簿
 function handleCreateWorkbook(params) {
     try {
-        var wb = Application.Workbooks.Add();
+        var wb = getWorkbooks().Add();
         if (params.name) {
             // 如果指定了名称，另存为
             wb.SaveAs(params.name);
